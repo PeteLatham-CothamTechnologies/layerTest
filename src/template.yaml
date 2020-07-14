@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Outputs:
+  DeploymentHistoryTag:
+    Description: Stackery Deployment History Tag
+    Value: CBKYBJ
+Parameters:
+  EnvironmentAPIGatewayStageName:
+    Default: test
+    Description: Environment name used for API Gateway Stage names (injected by Stackery
+      at deployment time)
+    Type: String
+  EnvironmentTagName:
+    Default: test
+    Description: Environment Name (injected by Stackery at deployment time)
+    Type: String
+  StackTagName:
+    Default: layerTest
+    Description: Stack Name (injected by Stackery at deployment time)
+    Type: String
+Resources:
+  DeploymentMarkerTagCBKYBJ:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  DoSomething:
+    DependsOn: DeploymentMarkerTagCBKYBJ
+    Properties:
+      CodeUri: s3://stackery-assetsbucket-i94thijryqx7/deployments/test/layerTest/functions/1225f4bf6c506f38e38ed42f8bc2cb03
+      Description:
+        Fn::Sub:
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Function ${ResourceName}
+        - ResourceName: DoSomething
+      Events:
+        testGET:
+          Properties:
+            Method: GET
+            Path: /
+            RestApiId:
+              Ref: test
+          Type: Api
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-DoSomething
+      Handler: index.handler
+      Layers:
+      - Ref: Layer
+      MemorySize: 3008
+      Policies:
+      - AWSXrayWriteOnlyAccess
+      Runtime: nodejs12.x
+      Timeout: 30
+      Tracing: Active
+    Type: AWS::Serverless::Function
+  Layer:
+    DependsOn: DeploymentMarkerTagCBKYBJ
+    Metadata:
+      BuildMethod: nodejs12.x
+    Properties:
+      ContentUri: s3://stackery-assetsbucket-i94thijryqx7/deployments/test/layerTest/functions/4dbca8989e79f4a6113c90becc303937
+      Description:
+        Fn::Sub:
+        - Stack ${StackTagName} Environment ${EnvironmentTagName} Layer ${ResourceName}
+        - ResourceName: Layer
+      RetentionPolicy: Retain
+    Type: AWS::Serverless::LayerVersion
+  test:
+    DependsOn: DeploymentMarkerTagCBKYBJ
+    Properties:
+      DefinitionBody:
+        info: {}
+        paths:
+          /:
+            get:
+              responses: {}
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DoSomething.Arn}/invocations
+        swagger: '2.0'
+      EndpointConfiguration: REGIONAL
+      Name:
+        Fn::Sub:
+        - ${ResourceName} From Stack ${StackTagName} Environment ${EnvironmentTagName}
+        - ResourceName: test
+      StageName:
+        Ref: EnvironmentAPIGatewayStageName
+      TracingEnabled: true
+    Type: AWS::Serverless::Api
+Transform: AWS::Serverless-2016-10-31
